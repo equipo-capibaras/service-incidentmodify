@@ -89,9 +89,8 @@ class TestClient(ParametrizedTestCase):
         self.assertEqual(doc.to_dict(), incident_dict)
 
     def test_append_history_entries(self) -> None:
-        client_id = cast(str, self.faker.uuid4())
-        incident_id = cast(str, self.faker.uuid4())
-        entries = [self.create_random_history_entry(client_id=client_id, incident_id=incident_id) for _ in range(5)]
+        incident = self.add_random_incidents(1)[0]
+        entries = [self.create_random_history_entry(client_id=incident.client_id, incident_id=incident.id) for _ in range(5)]
 
         for entry in entries:
             self.repo.append_history_entry(entry)
@@ -106,7 +105,7 @@ class TestClient(ParametrizedTestCase):
             entry_dict = asdict(entry)
             del entry_dict['client_id']
             del entry_dict['incident_id']
-            del entry_dict['seq']
+            entry_dict['seq'] = idx
             entry_db = doc.to_dict()
             self.assertEqual(entry_db, entry_dict)
 
