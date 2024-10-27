@@ -48,3 +48,18 @@ resource "google_firestore_index" "query-by-reporter-idx" {
     order      = "DESCENDING"
   }
 }
+
+resource "google_firestore_index" "query-by-assignee-idx" {
+  database   = google_firestore_database.default.name
+  collection = "incidents"
+
+  fields {
+    field_path = "assigned_to"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "last_modified"
+    order      = "DESCENDING"
+  }
+}
