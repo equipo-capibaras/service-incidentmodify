@@ -44,7 +44,9 @@ class FirestoreIncidentRepository(IncidentRepository):
         next_seq = int(cast(AggregationResult, history_ref.count().get()[0][0]).value)  # type: ignore[no-untyped-call]
         entry_ref = history_ref.document(str(next_seq))
 
+        history_dict['seq'] = next_seq
         entry_ref.create(history_dict)
+        incident_ref.update({'last_modified': entry.date})
 
     def delete_all(self) -> None:
         self.db.recursive_delete(self.db.collection('clients'))
