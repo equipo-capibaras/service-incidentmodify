@@ -33,3 +33,33 @@ resource "google_firestore_database" "default" {
 
   depends_on = [ google_project_service.firestore ]
 }
+
+resource "google_firestore_index" "query-by-reporter-idx" {
+  database   = google_firestore_database.default.name
+  collection = "incidents"
+
+  fields {
+    field_path = "reported_by"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "last_modified"
+    order      = "DESCENDING"
+  }
+}
+
+resource "google_firestore_index" "query-by-assignee-idx" {
+  database   = google_firestore_database.default.name
+  collection = "incidents"
+
+  fields {
+    field_path = "assigned_to"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "last_modified"
+    order      = "DESCENDING"
+  }
+}
