@@ -3,7 +3,7 @@ import os
 from flask import Flask
 from gcp_microservice_utils import setup_apigateway, setup_cloud_logging, setup_cloud_trace
 
-from blueprints import BlueprintBackup, BlueprintHealth, BlueprintReset, BlueprintIncident
+from blueprints import BlueprintBackup, BlueprintHealth, BlueprintIncident, BlueprintReset
 from containers import Container
 
 
