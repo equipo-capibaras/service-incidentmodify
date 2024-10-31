@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import timezone, datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -82,7 +82,7 @@ class RegistryIncident(MethodView):
         history_entry = HistoryEntry(
             incident_id=incident.id,
             client_id=incident.client_id,
-            date=datetime.now(timezone.utc).replace(microsecond=0),
+            date=datetime.now(UTC).replace(microsecond=0),
             action=Action.CREATED,
             description=data.description,
         )
