@@ -7,6 +7,10 @@ AGENT_ID_GIGATEL_JULIAN = '0abad006-921c-4e09-b2a6-10713b71571f'
 USER_ID_GIGATEL_MARIA = 'b713f559-cae5-4db3-992a-d3553fb25000'
 USER_ID_GIGATEL_JUAN = 'e7bcf651-c7d7-4dfa-9633-14598673faff'
 
+CLIENT_ID_UNIVERSO = 'acfa53b4-58f3-46e8-809b-19ef52b437ed'
+AGENT_ID_UNIVERSO_JOAO = '7ecbab00-726e-4c21-b7ea-17fa2ace7b1d'
+USER_ID_UNIVERSO_RAFAEL = '46f94cd1-8494-4e96-b308-80d7705868be'
+
 incident1 = Incident(
     id='36e3344d-aa5b-4c5a-88ef-a7eb8abe27d8',
     client_id=CLIENT_ID_GIGATEL,
@@ -187,7 +191,49 @@ incident6_history = [
     ),
 ]
 
-incidents = [incident1, incident2, incident3, incident4, incident5, incident6]
+incident7 = Incident(
+    id='41573516-fddd-4896-a0ce-16125f8dea1e',
+    client_id=CLIENT_ID_UNIVERSO,
+    name='Cobro incorrecto',
+    channel=Channel.WEB,
+    reported_by=USER_ID_UNIVERSO_RAFAEL,
+    created_by=AGENT_ID_UNIVERSO_JOAO,
+    assigned_to=AGENT_ID_UNIVERSO_JOAO,
+)
+
+incident7_history = [
+    HistoryEntry(
+        incident_id=incident7.id,
+        client_id=CLIENT_ID_UNIVERSO,
+        date=datetime(2024, 10, 18, 14, 26, 22, tzinfo=UTC),
+        action=Action.CREATED,
+        description=(
+            'He recibido mi factura de septiembre y aparece un cobro adicional por un servicio que no contraté. '
+            'El servicio en cuestión se llama "Asistencia Técnica Premium", pero yo nunca solicité ni autoricé este servicio. '
+            'Me di cuenta del cobro hoy, 10 de septiembre, al revisar el detalle de la factura. '
+            'Solicito que se revise mi cuenta y se realice el ajuste correspondiente en el menor tiempo posible.'
+        ),
+    ),
+    HistoryEntry(
+        incident_id=incident7.id,
+        client_id=CLIENT_ID_UNIVERSO,
+        date=datetime(2024, 10, 18, 15, 11, 41, tzinfo=UTC),
+        action=Action.ESCALATED,
+        description=(
+            'Se ha llamado al cliente para verificar si pudo solucionar el problema con las recomendaciones '
+            'planteadas por la IA, pero comenta seguir con el problema.'
+        ),
+    ),
+    HistoryEntry(
+        incident_id=incident7.id,
+        client_id=CLIENT_ID_UNIVERSO,
+        date=datetime(2024, 10, 18, 17, 31, 57, tzinfo=UTC),
+        action=Action.CLOSED,
+        description='Se hizó el ajuste en la tarjeta registrada para los pagos.',
+    ),
+]
+
+incidents = [incident1, incident2, incident3, incident4, incident5, incident6, incident7]
 history = {
     incident1.id: incident1_history,
     incident2.id: incident2_history,
@@ -195,4 +241,5 @@ history = {
     incident4.id: incident4_history,
     incident5.id: incident5_history,
     incident6.id: incident6_history,
+    incident7.id: incident7_history,
 }
