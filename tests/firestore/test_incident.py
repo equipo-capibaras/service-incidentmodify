@@ -12,8 +12,9 @@ from google.cloud.firestore import Client as FirestoreClient  # type: ignore[imp
 from google.cloud.firestore_v1 import CollectionReference
 from unittest_parametrize import ParametrizedTestCase
 
-from models import Action, Channel, HistoryEntry, Incident
+from models import HistoryEntry, Incident
 from repositories.firestore import FirestoreIncidentRepository
+from tests.util import create_random_history_entry, create_random_incident
 
 FIRESTORE_DATABASE = '(default)'
 
@@ -32,32 +33,16 @@ class TestClient(ParametrizedTestCase):
         self.repo = FirestoreIncidentRepository(FIRESTORE_DATABASE)
         self.client = FirestoreClient(database=FIRESTORE_DATABASE)
 
-    def create_random_incident(self, *, client_id: str | None = None) -> Incident:
-        return Incident(
-            id=cast(str, self.faker.uuid4()),
-            client_id=client_id or cast(str, self.faker.uuid4()),
-            name=self.faker.sentence(3),
-            channel=self.faker.random_element(list(Channel)),
-            reported_by=cast(str, self.faker.uuid4()),
-            created_by=cast(str, self.faker.uuid4()),
-            assigned_to=cast(str, self.faker.uuid4()),
-        )
-
-    def create_random_history_entry(self, *, client_id: str | None = None, incident_id: str | None = None) -> HistoryEntry:
-        return HistoryEntry(
-            incident_id=incident_id or cast(str, self.faker.uuid4()),
-            client_id=client_id or cast(str, self.faker.uuid4()),
-            date=self.faker.past_datetime(tzinfo=UTC),
-            action=self.faker.random_element(list(Action)),
-            description=self.faker.text(),
-        )
-
-    def add_random_incidents(self, n: int) -> list[Incident]:
+    def add_random_incidents(
+        self, n: int, client_id: str | None = None, reported_by: str | None = None, assigned_to: str | None = None
+    ) -> list[Incident]:
         incidents: list[Incident] = []
 
         # Add n incidents to Firestore
         for _ in range(n):
-            incident = self.create_random_incident()
+            incident = create_random_incident(
+                self.faker, client_id=client_id, reported_by=reported_by, assigned_to=assigned_to
+            )
 
             incidents.append(incident)
             incident_dict = asdict(incident)
@@ -69,12 +54,35 @@ class TestClient(ParametrizedTestCase):
                 client_ref.create({})
 
             incident_ref = cast(CollectionReference, client_ref.collection('incidents')).document(incident.id)
+            incident.last_modified = self.faker.past_datetime(tzinfo=UTC)  # type: ignore[attr-defined]
+            incident_dict['last_modified'] = incident.last_modified  # type: ignore[attr-defined]
             incident_ref.create(incident_dict)
 
         return incidents
 
+    def add_random_history_entries(
+        self, n: int, client_id: str | None = None, incident_id: str | None = None
+    ) -> list[HistoryEntry]:
+        entries: list[HistoryEntry] = []
+
+        # Add n history entries to Firestore
+        for i in range(n):
+            history_entry = create_random_history_entry(self.faker, seq=i, client_id=client_id, incident_id=incident_id)
+            entries.append(history_entry)
+            history_entry_dict = asdict(history_entry)
+            del history_entry_dict['incident_id']
+            del history_entry_dict['client_id']
+
+            client_ref = self.client.collection('clients').document(history_entry.client_id)
+            incident_ref = cast(CollectionReference, client_ref.collection('incidents')).document(history_entry.incident_id)
+            history_ref = cast(CollectionReference, incident_ref.collection('history')).document(str(i))
+            history_ref.create(history_entry_dict)
+            incident_ref.update({'last_modified': history_entry.date})
+
+        return entries
+
     def test_create(self) -> None:
-        incident = self.create_random_incident()
+        incident = create_random_incident(self.faker)
 
         self.repo.create(incident)
 
@@ -90,7 +98,10 @@ class TestClient(ParametrizedTestCase):
 
     def test_append_history_entries(self) -> None:
         incident = self.add_random_incidents(1)[0]
-        entries = [self.create_random_history_entry(client_id=incident.client_id, incident_id=incident.id) for _ in range(5)]
+        entries = [
+            create_random_history_entry(self.faker, seq=None, client_id=incident.client_id, incident_id=incident.id)
+            for _ in range(5)
+        ]
 
         for entry in entries:
             self.repo.append_history_entry(entry)
@@ -110,7 +121,7 @@ class TestClient(ParametrizedTestCase):
             self.assertEqual(entry_db, entry_dict)
 
     def test_append_history_valueerror(self) -> None:
-        entry = self.create_random_history_entry()
+        entry = create_random_history_entry(self.faker, seq=None)
         entry.seq = 1
 
         with self.assertRaises(ValueError):
@@ -127,3 +138,31 @@ class TestClient(ParametrizedTestCase):
             doc = incident_ref.get()
 
             self.assertFalse(doc.exists)
+
+    def test_get_history(self) -> None:
+        client_id = cast(str, self.faker.uuid4())
+        reporter_id = cast(str, self.faker.uuid4())
+
+        incident = self.add_random_incidents(1, client_id=client_id, reported_by=reporter_id)[0]
+        entries = self.add_random_history_entries(3, client_id=client_id, incident_id=incident.id)
+
+        result = list(self.repo.get_history(client_id=client_id, incident_id=incident.id))
+
+        self.assertEqual(result, entries)
+
+    def test_get_existing(self) -> None:
+        client_id = cast(str, self.faker.uuid4())
+
+        incident = self.add_random_incidents(1, client_id=client_id)[0]
+
+        result = self.repo.get(client_id=client_id, incident_id=incident.id)
+
+        self.assertEqual(result, incident)
+
+    def test_get_not_found(self) -> None:
+        client_id = cast(str, self.faker.uuid4())
+        incident_id = cast(str, self.faker.uuid4())
+
+        result = self.repo.get(client_id=client_id, incident_id=incident_id)
+
+        self.assertIsNone(result)
