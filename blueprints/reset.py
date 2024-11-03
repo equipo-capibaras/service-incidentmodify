@@ -1,3 +1,5 @@
+import copy
+
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, Response, request
 from flask.views import MethodView
@@ -27,6 +29,6 @@ class ResetDB(MethodView):
                 incident_repo.create(incident)
 
                 for entry in demo.history[incident.id]:
-                    incident_repo.append_history_entry(entry)
+                    incident_repo.append_history_entry(copy.copy(entry))
 
         return json_response({'status': 'Ok'}, 200)

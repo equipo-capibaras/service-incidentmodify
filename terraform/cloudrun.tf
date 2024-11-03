@@ -74,7 +74,8 @@ data "google_iam_policy" "default" {
     role = "roles/run.invoker"
     members = [
       data.google_service_account.apigateway.member,
-      data.google_service_account.backup.member
+      data.google_service_account.backup.member,
+      data.google_service_account.registroapp.member
     ]
   }
 }
