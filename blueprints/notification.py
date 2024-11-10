@@ -2,10 +2,20 @@ from typing import Any
 
 from dependency_injector.wiring import Provide
 from flask import current_app
+from lingua import Language, LanguageDetectorBuilder
 
 from containers import Container
-from models import HistoryEntry, Incident, User
-from repositories import EmployeeRepository, IncidentRepository, UserRepository
+from models import Client, HistoryEntry, Incident, User
+from repositories import ClientRepository, EmployeeRepository, IncidentRepository, UserRepository
+
+
+def client_to_dict(client: Client) -> dict[str, Any]:
+    return {
+        'id': client.id,
+        'name': client.name,
+        'emailIncidents': client.email_incidents,
+        'plan': client.plan.value,
+    }
 
 
 def history_to_dict(entry: HistoryEntry) -> dict[str, Any]:
@@ -69,15 +79,26 @@ def incident_to_dict(
 def send_notification(
     client_id: str,
     incident_id: str,
+    client_repo: ClientRepository = Provide[Container.client_repo],
     incident_repo: IncidentRepository = Provide[Container.incident_repo],
 ) -> None:
-    incident = incident_repo.get(client_id=client_id, incident_id=incident_id)
+    client = client_repo.get(client_id=client_id)
+    if client is None:
+        raise ValueError('Client not found.')
 
+    incident = incident_repo.get(client_id=client_id, incident_id=incident_id)
     if incident is None:
         raise ValueError('Incident not found.')
 
     history = incident_repo.get_history(client_id=client_id, incident_id=incident_id)
 
     data = incident_to_dict(incident, list(history))
+
+    data['client'] = client_to_dict(client)
+
+    detector = LanguageDetectorBuilder.from_languages(Language.SPANISH, Language.PORTUGUESE).build()
+    language = detector.detect_language_of(incident.name + '\n' + data['history'][0]['description'])
+
+    data['language'] = 'pt' if language == Language.PORTUGUESE else 'es'
 
     current_app.logger.error(data)
