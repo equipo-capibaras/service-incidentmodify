@@ -106,5 +106,12 @@ def send_notification(  # noqa: PLR0913
     data['language'] = 'pt' if language == Language.PORTUGUESE else 'es'
 
     publisher = PublisherClient()
-    future = cast(Future, publisher.publish(f'projects/{project_id}/topics/{topic}', json.dumps(data).encode('utf-8')))
+    future = cast(
+        Future,
+        publisher.publish(
+            f'projects/{project_id}/topics/{topic}',
+            json.dumps(data).encode('utf-8'),
+            **{'Content-Type': 'application/json'},
+        ),
+    )
     future.result()
