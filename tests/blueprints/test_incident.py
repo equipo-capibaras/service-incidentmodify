@@ -1,7 +1,7 @@
 import base64
 import json
 from typing import Any, cast
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from faker import Faker
 from unittest_parametrize import ParametrizedTestCase, parametrize
@@ -61,7 +61,8 @@ class TestIncident(ParametrizedTestCase):
             (Channel.MOBILE.value,),
         ],
     )
-    def test_register_incident_success(self, channel: str) -> None:
+    @patch('blueprints.incident.send_notification')
+    def test_register_incident_success(self, _send_notification: Mock, channel: str) -> None:
         incident_repo_mock = Mock(IncidentRepository)
         cast(Mock, incident_repo_mock.create).return_value = None
         cast(Mock, incident_repo_mock.append_history_entry).return_value = None
@@ -277,7 +278,8 @@ class TestIncident(ParametrizedTestCase):
 
         self.assertEqual(resp_data, {'code': 409, 'message': 'Incident is already closed.'})
 
-    def test_update_incident(self) -> None:
+    @patch('blueprints.incident.send_notification')
+    def test_update_incident(self, _send_notification: Mock) -> None:
         token = self.gen_token(client_id=str(self.faker.uuid4()))
         incident = create_random_incident(self.faker, assigned_to=token['sub'])
         data = {

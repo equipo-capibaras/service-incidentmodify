@@ -37,6 +37,21 @@ resource "google_cloud_run_v2_service" "default" {
         value = google_firestore_database.default.name
       }
 
+      env {
+        name = "USE_CLOUD_TOKEN_PROVIDER"
+        value = "1"
+      }
+
+      env {
+        name = "USER_SVC_URL"
+        value = "https://user-${data.google_project.default.number}.${local.region}.run.app"
+      }
+
+      env {
+        name = "CLIENT_SVC_URL"
+        value = "https://client-${data.google_project.default.number}.${local.region}.run.app"
+      }
+
       startup_probe {
         http_get {
           path = "/api/v1/health/${local.service_name}"
