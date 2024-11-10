@@ -2,7 +2,11 @@ resource "google_pubsub_topic" "incident_update" {
   name = "incident-update"
 }
 
-data "google_iam_policy" "pubusb" {
+resource "google_pubsub_topic" "incident_alert" {
+  name = "incident-alert"
+}
+
+data "google_iam_policy" "pubsub" {
   binding {
     role = "roles/pubsub.publisher"
     members = [
@@ -14,5 +18,11 @@ data "google_iam_policy" "pubusb" {
 resource "google_pubsub_topic_iam_policy" "incident_update" {
   project = google_pubsub_topic.incident_update.project
   topic = google_pubsub_topic.incident_update.name
-  policy_data = data.google_iam_policy.pubusb.policy_data
+  policy_data = data.google_iam_policy.pubsub.policy_data
+}
+
+resource "google_pubsub_topic_iam_policy" "incident_alert" {
+  project = google_pubsub_topic.incident_alert.project
+  topic = google_pubsub_topic.incident_alert.name
+  policy_data = data.google_iam_policy.pubsub.policy_data
 }
