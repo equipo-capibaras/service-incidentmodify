@@ -14,6 +14,7 @@ from containers import Container
 from models import Action, Channel, HistoryEntry, Incident
 from repositories import IncidentRepository
 
+from .notification import send_notification
 from .util import class_route, error_response, is_valid_uuid4, json_response, requires_token, validation_error_response
 
 blp = Blueprint('Incident', __name__)
@@ -101,6 +102,11 @@ class RegistryIncident(MethodView):
         incident_repo.create(incident)
         incident_repo.append_history_entry(history_entry)
 
+        send_notification(incident.client_id, incident.id, 'incident-update')
+
+        if 'urgente' in data.description.lower():
+            send_notification(incident.client_id, incident.id, 'incident-alert')
+
         return json_response(incident_to_dict(incident), 201)
 
 
@@ -154,5 +160,7 @@ class IncidentDetail(MethodView):
             description=data.description,
         )
         incident_repo.append_history_entry(history_entry)
+
+        send_notification(incident.client_id, incident.id, 'incident-update')
 
         return json_response(history_to_dict(history_entry), 201)
