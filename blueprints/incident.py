@@ -104,6 +104,9 @@ class RegistryIncident(MethodView):
 
         send_notification(incident.client_id, incident.id, 'incident-update')
 
+        if 'urgente' in data.description.lower():
+            send_notification(incident.client_id, incident.id, 'incident-alert')
+
         return json_response(incident_to_dict(incident), 201)
 
 
