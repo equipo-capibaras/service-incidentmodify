@@ -1,7 +1,9 @@
-from typing import Any
+import json
+from typing import Any, cast
 
 from dependency_injector.wiring import Provide
-from flask import current_app
+from google.cloud.pubsub_v1 import PublisherClient  # type: ignore[import-untyped]
+from google.cloud.pubsub_v1.publisher.futures import Future  # type: ignore[import-untyped]
 from lingua import Language, LanguageDetectorBuilder
 
 from containers import Container
@@ -76,11 +78,13 @@ def incident_to_dict(
     }
 
 
-def send_notification(
+def send_notification(  # noqa: PLR0913
     client_id: str,
     incident_id: str,
+    topic: str,
     client_repo: ClientRepository = Provide[Container.client_repo],
     incident_repo: IncidentRepository = Provide[Container.incident_repo],
+    project_id: str = Provide[Container.config.project_id],
 ) -> None:
     client = client_repo.get(client_id=client_id)
     if client is None:
@@ -101,4 +105,6 @@ def send_notification(
 
     data['language'] = 'pt' if language == Language.PORTUGUESE else 'es'
 
-    current_app.logger.error(data)
+    publisher = PublisherClient()
+    future = cast(Future, publisher.publish(f'projects/{project_id}/topics/{topic}', json.dumps(data).encode('utf-8')))
+    future.result()

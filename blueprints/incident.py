@@ -102,7 +102,7 @@ class RegistryIncident(MethodView):
         incident_repo.create(incident)
         incident_repo.append_history_entry(history_entry)
 
-        send_notification(incident.client_id, incident.id)
+        send_notification(incident.client_id, incident.id, 'incident-update')
 
         return json_response(incident_to_dict(incident), 201)
 
@@ -158,6 +158,6 @@ class IncidentDetail(MethodView):
         )
         incident_repo.append_history_entry(history_entry)
 
-        send_notification(incident.client_id, incident.id)
+        send_notification(incident.client_id, incident.id, 'incident-update')
 
         return json_response(history_to_dict(history_entry), 201)
