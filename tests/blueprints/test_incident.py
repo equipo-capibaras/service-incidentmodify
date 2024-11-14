@@ -13,7 +13,8 @@ from repositories import IncidentRepository
 from tests.util import create_random_history_entry, create_random_incident
 
 
-class TestIncident(ParametrizedTestCase):
+class TestIncidentUpdate(ParametrizedTestCase):
+    INCIDENT_INTERNAL_UPDATE_URL = '/api/v1/clients/{client_id}/employees/{assigned_to}/incidents/{incident_id}/update'
     REGISTER_INCIDENT_URL = '/api/v1/register/incident'
     INCIDENT_UPDATE_URL = '/api/v1/incidents/{incident_id}/update'
 
@@ -34,6 +35,21 @@ class TestIncident(ParametrizedTestCase):
         return self.client.post(
             self.REGISTER_INCIDENT_URL,
             data=body if isinstance(body, str) else json.dumps(body),
+            content_type='application/json',
+        )
+
+    def call_internal_update_api(
+        self, token: dict[str, Any], client_id: str, assigned_to: str, incident_id: str, body: dict[str, Any] | str
+    ) -> TestResponse:
+        token_encoded = base64.urlsafe_b64encode(json.dumps(token).encode()).decode()
+        try:
+            data = json.dumps(body)
+        except TypeError:
+            data = json.dumps({'error': 'invalid body'})
+        return self.client.post(
+            self.INCIDENT_INTERNAL_UPDATE_URL.format(client_id=client_id, assigned_to=assigned_to, incident_id=incident_id),
+            headers={'X-Apigateway-Api-Userinfo': token_encoded},
+            data=data,
             content_type='application/json',
         )
 
@@ -304,3 +320,102 @@ class TestIncident(ParametrizedTestCase):
 
         self.assertEqual(resp_data['action'], data['action'])
         self.assertEqual(resp_data['description'], data['description'])
+
+    def test_internal_invalid_json_body(self) -> None:
+        token = self.gen_token(client_id=str(self.faker.uuid4()))
+        client_id = str(self.faker.uuid4())
+        assigned_to = str(self.faker.uuid4())
+        incident_id = str(self.faker.uuid4())
+
+        invalid_body = {'invalid': object()}
+
+        response = self.call_internal_update_api(token, client_id, assigned_to, incident_id, invalid_body)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            (
+                'Invalid value for action: Missing data for required field. Invalid value for description: Missing data for '
+                'required field. Invalid value for error: Unknown field.'
+            ),
+            response.get_data(as_text=True),
+        )
+
+    def test_internal_invalid_incident_id(self) -> None:
+        token = self.gen_token(client_id=str(self.faker.uuid4()))
+        client_id = str(self.faker.uuid4())
+        assigned_to = str(self.faker.uuid4())
+        invalid_incident_id = 'invalid-uuid'
+
+        body = {'action': Action.ESCALATED.value, 'description': 'Test description'}
+        response = self.call_internal_update_api(token, client_id, assigned_to, invalid_incident_id, body)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Invalid incident ID.', response.get_data(as_text=True))
+
+    def test_internal_incident_not_found(self) -> None:
+        token = self.gen_token(client_id=str(self.faker.uuid4()))
+        client_id = str(self.faker.uuid4())
+        assigned_to = str(self.faker.uuid4())
+        incident_id = str(self.faker.uuid4())
+
+        incident_repo_mock = Mock(IncidentRepository)
+        incident_repo_mock.get.return_value = None
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            response = self.call_internal_update_api(
+                token, client_id, assigned_to, incident_id, {'action': 'closed', 'description': 'Test'}
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('Incident not found.', response.get_data(as_text=True))
+
+    def test_internal_not_assigned_to_user(self) -> None:
+        token = self.gen_token(client_id=str(self.faker.uuid4()))
+        incident = create_random_incident(self.faker)
+        body = {'action': Action.CLOSED.value, 'description': 'Closing incident'}
+
+        incident_repo_mock = Mock(IncidentRepository)
+        incident_repo_mock.get.return_value = incident
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            response = self.call_internal_update_api(token, incident.client_id, str(self.faker.uuid4()), incident.id, body)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('You are not allowed to access this incident.', response.get_data(as_text=True))
+
+    def test_internal_incident_already_closed(self) -> None:
+        token = self.gen_token(client_id=str(self.faker.uuid4()))
+        incident = create_random_incident(self.faker)
+        history = [create_random_history_entry(self.faker, seq=0)]
+        history[0].action = Action.CLOSED
+
+        incident_repo_mock = Mock(IncidentRepository)
+        incident_repo_mock.get.return_value = incident
+        incident_repo_mock.get_history.return_value = history
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            response = self.call_internal_update_api(
+                token, incident.client_id, incident.assigned_to, incident.id, {'action': 'closed', 'description': 'Test'}
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('Incident is already closed.', response.get_data(as_text=True))
+
+    @patch('blueprints.incident.send_notification')
+    def test_internal_update_success(self, _send_notification: Mock) -> None:
+        token = self.gen_token(client_id=str(self.faker.uuid4()))
+        incident = create_random_incident(self.faker)
+        history_entry = create_random_history_entry(self.faker, seq=0)
+        history_entry.action = Action.CREATED
+        update_body = {'action': Action.ESCALATED.value, 'description': 'Escalating incident'}
+
+        incident_repo_mock = Mock(IncidentRepository)
+        incident_repo_mock.get.return_value = incident
+        incident_repo_mock.get_history.return_value = [history_entry]
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            response = self.call_internal_update_api(token, incident.client_id, incident.assigned_to, incident.id, update_body)
+
+        self.assertEqual(response.status_code, 201)
+        resp_data = json.loads(response.get_data())
+        self.assertEqual(resp_data['action'], update_body['action'])
+        self.assertEqual(resp_data['description'], update_body['description'])
