@@ -45,7 +45,7 @@ class TestEmployee(ParametrizedTestCase):
             name=self.faker.name(),
             email=self.faker.email(),
             role=self.faker.random_element([Role.ADMIN, Role.AGENT, Role.ANALYST]),
-            invitation_status=self.faker.random_element(list(InvitationStatus)),
+            invitation_status=cast(InvitationStatus, self.faker.random_element(list(InvitationStatus))),
             invitation_date=self.faker.past_datetime(),
         )
 
