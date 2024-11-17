@@ -112,7 +112,9 @@ class RegistryIncident(MethodView):
 
 @dataclass
 class IncidentUpdateBody:
-    action: str = field(metadata={'validate': [marshmallow.validate.OneOf([Action.ESCALATED, Action.CLOSED])]})
+    action: str = field(
+        metadata={'validate': [marshmallow.validate.OneOf([Action.ESCALATED, Action.CLOSED, Action.AI_RESPONSE])]}
+    )
     description: str = field(metadata={'validate': marshmallow.validate.Length(min=1, max=1000)})
 
 
@@ -148,6 +150,57 @@ class IncidentDetail(MethodView):
             return error_response('You are not allowed to access this incident.', 403)
 
         history = list(incident_repo.get_history(client_id=token['cid'], incident_id=incident.id))
+
+        if history[-1].action == Action.CLOSED:
+            return error_response('Incident is already closed.', 409)
+
+        history_entry = HistoryEntry(
+            incident_id=incident.id,
+            client_id=incident.client_id,
+            date=datetime.now(UTC).replace(microsecond=0),
+            action=Action(data.action),
+            description=data.description,
+        )
+        incident_repo.append_history_entry(history_entry)
+
+        send_notification(incident.client_id, incident.id, 'incident-update')
+
+        return json_response(history_to_dict(history_entry), 201)
+
+
+# Internal only
+@class_route(blp, '/api/v1/clients/<client_id>/employees/<assigned_to>/incidents/<incident_id>/update')
+class IncidentUpdate(MethodView):
+    init_every_request = False
+
+    def post(  # noqa: PLR0911
+        self,
+        client_id: str,
+        incident_id: str,
+        assigned_to: str,
+        incident_repo: IncidentRepository = Provide[Container.incident_repo],
+    ) -> Response:
+        auth_schema = marshmallow_dataclass.class_schema(IncidentUpdateBody)()
+        req_json = request.get_json(silent=True)
+        if req_json is None:
+            return error_response('The request body could not be parsed as valid JSON.', 400)
+
+        try:
+            data: IncidentUpdateBody = auth_schema.load(req_json)
+        except ValidationError as err:
+            return validation_error_response(err)
+
+        if not is_valid_uuid4(incident_id):
+            return error_response('Invalid incident ID.', 400)
+
+        incident = incident_repo.get(client_id=client_id, incident_id=incident_id)
+        if incident is None:
+            return error_response('Incident not found.', 404)
+
+        if incident.assigned_to != assigned_to:
+            return error_response('You are not allowed to access this incident.', 403)
+
+        history = list(incident_repo.get_history(client_id=client_id, incident_id=incident.id))
 
         if history[-1].action == Action.CLOSED:
             return error_response('Incident is already closed.', 409)

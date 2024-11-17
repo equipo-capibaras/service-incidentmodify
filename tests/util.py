@@ -18,7 +18,7 @@ def create_random_incident(
         id=cast(str, faker.uuid4()),
         client_id=client_id or cast(str, faker.uuid4()),
         name=faker.sentence(3),
-        channel=faker.random_element(list(Channel)),
+        channel=cast(Channel, faker.random_element(list(Channel))),
         reported_by=reported_by or cast(str, faker.uuid4()),
         created_by=created_by or cast(str, faker.uuid4()),
         assigned_to=assigned_to or cast(str, faker.uuid4()),
@@ -32,7 +32,7 @@ def create_random_history_entry(
         incident_id=incident_id or cast(str, faker.uuid4()),
         client_id=client_id or cast(str, faker.uuid4()),
         date=faker.past_datetime(tzinfo=UTC),
-        action=faker.random_element(list(Action)),
+        action=cast(Action, faker.random_element(list(Action))),
         description=faker.text(),
         seq=seq,
     )

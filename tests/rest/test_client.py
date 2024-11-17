@@ -39,7 +39,7 @@ class TestClient(ParametrizedTestCase):
         client = Client(
             id=cast(str, self.faker.uuid4()),
             name=self.faker.company(),
-            plan=self.faker.random_element(list(Plan)),
+            plan=cast(Plan, self.faker.random_element(list(Plan))),
             email_incidents=self.faker.email(),
         )
 
