@@ -491,17 +491,30 @@ class TestIncidentUpdate(ParametrizedTestCase):
         resp_data = json.loads(resp.get_data())
         self.assertEqual(resp_data, {'code': 400, 'message': INVALID_UUID_ERROR.format(field='incident_id')})
 
+    @parametrize(
+        'initial_risk, updated_risk, expected_status_code, should_notify',
+        [
+            (Risk.LOW.value, Risk.HIGH.value, 200, True),
+            (Risk.HIGH.value, Risk.HIGH.value, 200, False),
+        ],
+    )
     @patch('blueprints.incident.send_notification')
-    def test_update_risk_success(self, _send_notification: Mock) -> None:
+    def test_update_risk(
+        self,
+        _send_notification: Mock,
+        initial_risk: str,
+        updated_risk: str,
+        expected_status_code: int,
+        should_notify: bool,  # noqa: FBT001
+    ) -> None:
         client_id = str(self.faker.uuid4())
-        incident = create_random_incident(self.faker, overrides={'client_id': client_id, 'risk': Risk.LOW.value})
-        data = {'risk': Risk.HIGH.value}
+        incident = create_random_incident(self.faker, overrides={'client_id': client_id, 'risk': initial_risk})
+        data = {'risk': updated_risk}
 
-        # Crear el mock del repositorio con `spec`
         incident_repo_mock = Mock(spec=IncidentRepository)
         incident_repo_mock.get.return_value = incident
         incident_repo_mock.get_history.return_value = [create_random_history_entry(self.faker, seq=0, action=Action.CREATED)]
-        incident_repo_mock.update.return_value = None  # Define explícitamente `update`
+        incident_repo_mock.update.return_value = None
 
         with self.app.container.incident_repo.override(incident_repo_mock):
             resp = self.client.put(
@@ -510,32 +523,12 @@ class TestIncidentUpdate(ParametrizedTestCase):
                 content_type='application/json',
             )
 
-        self.assertEqual(resp.status_code, 200)
-        resp_data = json.loads(resp.get_data())
-        self.assertEqual(resp_data['risk'], data['risk'])
-        _send_notification.assert_called_once_with(client_id, incident.id, 'incident-risk-updated')
+        self.assertEqual(resp.status_code, expected_status_code)
 
-    @patch('blueprints.incident.send_notification')
-    def test_update_risk_no_notification_if_risk_unchanged(self, _send_notification: Mock) -> None:
-        client_id = str(self.faker.uuid4())
-        incident = create_random_incident(self.faker, overrides={'client_id': client_id, 'risk': Risk.HIGH.value})
-        data = {'risk': Risk.HIGH.value}  # El riesgo no cambia
-
-        # Crear el mock del repositorio con `spec`
-        incident_repo_mock = Mock(spec=IncidentRepository)
-        incident_repo_mock.get.return_value = incident
-        incident_repo_mock.get_history.return_value = [create_random_history_entry(self.faker, seq=0, action=Action.CREATED)]
-        incident_repo_mock.update.return_value = None  # Define explícitamente `update`
-
-        with self.app.container.incident_repo.override(incident_repo_mock):
-            resp = self.client.put(
-                f'/api/v1/clients/{client_id}/incidents/{incident.id}/update-risk',
-                data=json.dumps(data),
-                content_type='application/json',
-            )
-
-        self.assertEqual(resp.status_code, 200)
-        _send_notification.assert_not_called()
+        if should_notify:
+            _send_notification.assert_called_once_with(client_id, incident.id, 'incident-risk-updated')
+        else:
+            _send_notification.assert_not_called()
 
     def test_update_risk_validation_error(self) -> None:
         client_id = str(self.faker.uuid4())
