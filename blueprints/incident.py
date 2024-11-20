@@ -227,9 +227,10 @@ class IncidentUpdate(MethodView):
 
 @dataclass
 class IncidentRiskUpdateBody:
-    risk: str = field(metadata={'validate': marshmallow.validate.OneOf([Risk.HIGH, Risk.LOW, Risk.MEDIUM])})
+    risk: Risk = field(metadata={'validate': marshmallow.validate.OneOf([Risk.HIGH, Risk.LOW, Risk.MEDIUM])})
 
 
+# Internal only
 @class_route(blp, '/api/v1/clients/<client_id>/incidents/<incident_id>/update-risk')
 class IncidentUpdateRisk(MethodView):
     init_every_request = False

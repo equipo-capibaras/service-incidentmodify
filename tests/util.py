@@ -11,6 +11,7 @@ def create_random_incident(
     overrides: dict[str, str | None] | None = None,
 ) -> Incident:
     overrides = overrides or {}
+    risk_value = overrides.get('risk')
     return Incident(
         id=cast(str, faker.uuid4()),
         client_id=overrides.get('client_id') or cast(str, faker.uuid4()),
@@ -19,7 +20,7 @@ def create_random_incident(
         reported_by=overrides.get('reported_by') or cast(str, faker.uuid4()),
         created_by=overrides.get('created_by') or cast(str, faker.uuid4()),
         assigned_to=overrides.get('assigned_to') or cast(str, faker.uuid4()),
-        risk=overrides.get('risk') or faker.random_element(list(Risk)),
+        risk=Risk(risk_value) if risk_value is not None else faker.random_element(list(Risk)),
     )
 
 
