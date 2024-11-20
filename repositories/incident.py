@@ -18,3 +18,6 @@ class IncidentRepository:
 
     def delete_all(self) -> None:
         raise NotImplementedError  # pragma: no cover
+
+    def update(self, incident: Incident) -> None:
+        raise NotImplementedError  # pragma: no cover
