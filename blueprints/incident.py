@@ -11,16 +11,20 @@ from flask.views import MethodView
 from marshmallow import ValidationError
 
 from containers import Container
-from models import Action, Channel, HistoryEntry, Incident
+from models import Action, Channel, HistoryEntry, Incident, Risk
 from repositories import IncidentRepository
+from utils import (
+    CLOSED_INCIDENT_ERROR,
+    INCIDENT_NOT_FOUND,
+    INVALID_UUID_ERROR,
+    JSON_VALIDATION_ERROR,
+    UNAUTHORIZED_INCIDENT_ERROR,
+)
 
 from .notification import send_notification
 from .util import class_route, error_response, is_valid_uuid4, json_response, requires_token, validation_error_response
 
 blp = Blueprint('Incident', __name__)
-
-JSON_VALIDATION_ERROR = 'Request body must be a JSON object.'
-INVALID_UUID_ERROR = 'Invalid UUID format for {field}.'
 
 
 def incident_to_dict(incident: Incident) -> dict[str, Any]:
@@ -32,6 +36,7 @@ def incident_to_dict(incident: Incident) -> dict[str, Any]:
         'reported_by': incident.reported_by,
         'created_by': incident.created_by,
         'assigned_to': incident.assigned_to,
+        'risk': incident.risk,
     }
 
 
@@ -87,6 +92,7 @@ class RegistryIncident(MethodView):
             reported_by=data.reported_by,
             created_by=data.created_by,
             assigned_to=data.assigned_to,
+            risk=None,
         )
 
         # Append history entry
@@ -132,7 +138,7 @@ class IncidentDetail(MethodView):
         auth_schema = marshmallow_dataclass.class_schema(IncidentUpdateBody)()
         req_json = request.get_json(silent=True)
         if req_json is None:
-            return error_response('The request body could not be parsed as valid JSON.', 400)
+            return error_response(JSON_VALIDATION_ERROR, 400)
 
         try:
             data: IncidentUpdateBody = auth_schema.load(req_json)
@@ -140,19 +146,19 @@ class IncidentDetail(MethodView):
             return validation_error_response(err)
 
         if not is_valid_uuid4(incident_id):
-            return error_response('Invalid incident ID.', 400)
+            return error_response(INVALID_UUID_ERROR.format(field='incident_id'), 400)
 
         incident = incident_repo.get(client_id=token['cid'], incident_id=incident_id)
         if incident is None:
-            return error_response('Incident not found.', 404)
+            return error_response(INCIDENT_NOT_FOUND, 404)
 
         if incident.assigned_to != token['sub']:
-            return error_response('You are not allowed to access this incident.', 403)
+            return error_response(UNAUTHORIZED_INCIDENT_ERROR, 403)
 
         history = list(incident_repo.get_history(client_id=token['cid'], incident_id=incident.id))
 
         if history[-1].action == Action.CLOSED:
-            return error_response('Incident is already closed.', 409)
+            return error_response(CLOSED_INCIDENT_ERROR, 409)
 
         history_entry = HistoryEntry(
             incident_id=incident.id,
@@ -183,7 +189,7 @@ class IncidentUpdate(MethodView):
         auth_schema = marshmallow_dataclass.class_schema(IncidentUpdateBody)()
         req_json = request.get_json(silent=True)
         if req_json is None:
-            return error_response('The request body could not be parsed as valid JSON.', 400)
+            return error_response(JSON_VALIDATION_ERROR, 400)
 
         try:
             data: IncidentUpdateBody = auth_schema.load(req_json)
@@ -191,19 +197,19 @@ class IncidentUpdate(MethodView):
             return validation_error_response(err)
 
         if not is_valid_uuid4(incident_id):
-            return error_response('Invalid incident ID.', 400)
+            return error_response(INVALID_UUID_ERROR.format(field='incident_id'), 400)
 
         incident = incident_repo.get(client_id=client_id, incident_id=incident_id)
         if incident is None:
-            return error_response('Incident not found.', 404)
+            return error_response(INCIDENT_NOT_FOUND, 404)
 
         if incident.assigned_to != assigned_to:
-            return error_response('You are not allowed to access this incident.', 403)
+            return error_response(UNAUTHORIZED_INCIDENT_ERROR, 403)
 
         history = list(incident_repo.get_history(client_id=client_id, incident_id=incident.id))
 
         if history[-1].action == Action.CLOSED:
-            return error_response('Incident is already closed.', 409)
+            return error_response(CLOSED_INCIDENT_ERROR, 409)
 
         history_entry = HistoryEntry(
             incident_id=incident.id,
@@ -217,3 +223,50 @@ class IncidentUpdate(MethodView):
         send_notification(incident.client_id, incident.id, 'incident-update')
 
         return json_response(history_to_dict(history_entry), 201)
+
+
+@dataclass
+class IncidentRiskUpdateBody:
+    risk: str = field(metadata={'validate': marshmallow.validate.OneOf([Risk.HIGH, Risk.LOW, Risk.MEDIUM])})
+
+
+@class_route(blp, '/api/v1/clients/<client_id>/incidents/<incident_id>/update-risk')
+class IncidentUpdateRisk(MethodView):
+    init_every_request = False
+
+    def put(
+        self,
+        client_id: str,
+        incident_id: str,
+        incident_repo: IncidentRepository = Provide[Container.incident_repo],
+    ) -> Response:
+        auth_schema = marshmallow_dataclass.class_schema(IncidentRiskUpdateBody)()
+        req_json = request.get_json(silent=True)
+        if req_json is None:
+            return error_response(JSON_VALIDATION_ERROR, 400)
+
+        try:
+            data: IncidentRiskUpdateBody = auth_schema.load(req_json)
+        except ValidationError as err:
+            return validation_error_response(err)
+
+        if not is_valid_uuid4(incident_id):
+            return error_response(INVALID_UUID_ERROR.format(field='incident_id'), 400)
+
+        incident = incident_repo.get(client_id=client_id, incident_id=incident_id)
+        if incident is None:
+            return error_response(INCIDENT_NOT_FOUND, 404)
+
+        history = list(incident_repo.get_history(client_id=client_id, incident_id=incident.id))
+
+        if history[-1].action == Action.CLOSED:
+            return error_response(CLOSED_INCIDENT_ERROR, 409)
+
+        prev_risk = incident.risk
+        incident.risk = data.risk
+        incident_repo.update(incident)
+
+        if prev_risk != data.risk:
+            send_notification(incident.client_id, incident.id, 'incident-risk-updated')
+
+        return json_response(incident_to_dict(incident), 200)

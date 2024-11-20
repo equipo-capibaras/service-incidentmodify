@@ -8,9 +8,10 @@ from unittest_parametrize import ParametrizedTestCase, parametrize
 from werkzeug.test import TestResponse
 
 from app import create_app
-from models import Action, Channel
+from models import Action, Channel, Risk
 from repositories import IncidentRepository
 from tests.util import create_random_history_entry, create_random_incident
+from utils import CLOSED_INCIDENT_ERROR, INCIDENT_NOT_FOUND, INVALID_UUID_ERROR, JSON_VALIDATION_ERROR
 
 
 class TestIncidentUpdate(ParametrizedTestCase):
@@ -193,7 +194,7 @@ class TestIncidentUpdate(ParametrizedTestCase):
         self.assertEqual(resp.status_code, 400)
         resp_data = json.loads(resp.get_data())
 
-        self.assertEqual(resp_data, {'code': 400, 'message': 'The request body could not be parsed as valid JSON.'})
+        self.assertEqual(resp_data, {'code': 400, 'message': JSON_VALIDATION_ERROR})
 
     @parametrize(
         'field',
@@ -222,7 +223,7 @@ class TestIncidentUpdate(ParametrizedTestCase):
         resp_data = json.loads(resp.get_data())
 
         if field == 'incident_id':
-            self.assertEqual(resp_data, {'code': 400, 'message': 'Invalid incident ID.'})
+            self.assertEqual(resp_data, {'code': 400, 'message': INVALID_UUID_ERROR.format(field='incident_id')})
         else:
             self.assertEqual(
                 resp_data, {'code': 400, 'message': f'Invalid value for {field}: Missing data for required field.'}
@@ -270,7 +271,7 @@ class TestIncidentUpdate(ParametrizedTestCase):
 
     def test_update_incident_closed(self) -> None:
         token = self.gen_token(client_id=str(self.faker.uuid4()))
-        incident = create_random_incident(self.faker, assigned_to=token['sub'])
+        incident = create_random_incident(self.faker, overrides={'assigned_to': token['sub']})
         data = {
             'action': self.faker.random_element([Action.ESCALATED, Action.CLOSED]),
             'description': self.faker.sentence(),
@@ -297,7 +298,7 @@ class TestIncidentUpdate(ParametrizedTestCase):
     @patch('blueprints.incident.send_notification')
     def test_update_incident(self, _send_notification: Mock) -> None:
         token = self.gen_token(client_id=str(self.faker.uuid4()))
-        incident = create_random_incident(self.faker, assigned_to=token['sub'])
+        incident = create_random_incident(self.faker, overrides={'assigned_to': token['sub']})
         data = {
             'action': self.faker.random_element([Action.ESCALATED, Action.CLOSED]),
             'description': self.faker.sentence(),
@@ -349,7 +350,7 @@ class TestIncidentUpdate(ParametrizedTestCase):
         response = self.call_internal_update_api(token, client_id, assigned_to, invalid_incident_id, body)
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn('Invalid incident ID.', response.get_data(as_text=True))
+        self.assertIn(INVALID_UUID_ERROR.format(field='incident_id'), response.get_data(as_text=True))
 
     def test_internal_incident_not_found(self) -> None:
         token = self.gen_token(client_id=str(self.faker.uuid4()))
@@ -398,7 +399,7 @@ class TestIncidentUpdate(ParametrizedTestCase):
             )
 
         self.assertEqual(response.status_code, 409)
-        self.assertIn('Incident is already closed.', response.get_data(as_text=True))
+        self.assertIn(CLOSED_INCIDENT_ERROR, response.get_data(as_text=True))
 
     @patch('blueprints.incident.send_notification')
     def test_internal_update_success(self, _send_notification: Mock) -> None:
@@ -419,3 +420,140 @@ class TestIncidentUpdate(ParametrizedTestCase):
         resp_data = json.loads(response.get_data())
         self.assertEqual(resp_data['action'], update_body['action'])
         self.assertEqual(resp_data['description'], update_body['description'])
+
+    def test_update_risk_invalid_json(self) -> None:
+        client_id = str(self.faker.uuid4())
+        incident_id = str(self.faker.uuid4())
+
+        resp = self.client.put(
+            f'/api/v1/clients/{client_id}/incidents/{incident_id}/update-risk',
+            data=self.faker.word(),  # Not a valid JSON
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        resp_data = json.loads(resp.get_data())
+        self.assertEqual(resp_data, {'code': 400, 'message': JSON_VALIDATION_ERROR})
+
+    def test_update_risk_incident_not_found(self) -> None:
+        client_id = str(self.faker.uuid4())
+        incident_id = str(self.faker.uuid4())
+        data = {'risk': Risk.LOW.value}
+
+        incident_repo_mock = Mock(IncidentRepository)
+        cast(Mock, incident_repo_mock.get).return_value = None
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            resp = self.client.put(
+                f'/api/v1/clients/{client_id}/incidents/{incident_id}/update-risk',
+                data=json.dumps(data),
+                content_type='application/json',
+            )
+
+        self.assertEqual(resp.status_code, 404)
+        resp_data = json.loads(resp.get_data())
+        self.assertEqual(resp_data, {'code': 404, 'message': INCIDENT_NOT_FOUND})
+
+    def test_update_risk_closed_incident(self) -> None:
+        client_id = str(self.faker.uuid4())
+        incident = create_random_incident(self.faker, overrides={'client_id': client_id})
+        data = {'risk': Risk.MEDIUM.value}
+
+        incident_repo_mock = Mock(IncidentRepository)
+        cast(Mock, incident_repo_mock.get).return_value = incident
+        cast(Mock, incident_repo_mock.get_history).return_value = [
+            create_random_history_entry(self.faker, seq=0, action=Action.CLOSED)
+        ]
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            resp = self.client.put(
+                f'/api/v1/clients/{client_id}/incidents/{incident.id}/update-risk',
+                data=json.dumps(data),
+                content_type='application/json',
+            )
+
+        self.assertEqual(resp.status_code, 409)
+        resp_data = json.loads(resp.get_data())
+        self.assertEqual(resp_data, {'code': 409, 'message': CLOSED_INCIDENT_ERROR})
+
+    def test_update_risk_invalid_incident_id(self) -> None:
+        client_id = str(self.faker.uuid4())
+        invalid_incident_id = 'not-a-valid-uuid'
+        data = {'risk': Risk.LOW.value}
+
+        resp = self.client.put(
+            f'/api/v1/clients/{client_id}/incidents/{invalid_incident_id}/update-risk',
+            data=json.dumps(data),
+            content_type='application/json',
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        resp_data = json.loads(resp.get_data())
+        self.assertEqual(resp_data, {'code': 400, 'message': INVALID_UUID_ERROR.format(field='incident_id')})
+
+    @patch('blueprints.incident.send_notification')
+    def test_update_risk_success(self, _send_notification: Mock) -> None:
+        client_id = str(self.faker.uuid4())
+        incident = create_random_incident(self.faker, overrides={'client_id': client_id, 'risk': Risk.LOW.value})
+        data = {'risk': Risk.HIGH.value}
+
+        # Crear el mock del repositorio con `spec`
+        incident_repo_mock = Mock(spec=IncidentRepository)
+        incident_repo_mock.get.return_value = incident
+        incident_repo_mock.get_history.return_value = [create_random_history_entry(self.faker, seq=0, action=Action.CREATED)]
+        incident_repo_mock.update.return_value = None  # Define explícitamente `update`
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            resp = self.client.put(
+                f'/api/v1/clients/{client_id}/incidents/{incident.id}/update-risk',
+                data=json.dumps(data),
+                content_type='application/json',
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        resp_data = json.loads(resp.get_data())
+        self.assertEqual(resp_data['risk'], data['risk'])
+        _send_notification.assert_called_once_with(client_id, incident.id, 'incident-risk-updated')
+
+    @patch('blueprints.incident.send_notification')
+    def test_update_risk_no_notification_if_risk_unchanged(self, _send_notification: Mock) -> None:
+        client_id = str(self.faker.uuid4())
+        incident = create_random_incident(self.faker, overrides={'client_id': client_id, 'risk': Risk.HIGH.value})
+        data = {'risk': Risk.HIGH.value}  # El riesgo no cambia
+
+        # Crear el mock del repositorio con `spec`
+        incident_repo_mock = Mock(spec=IncidentRepository)
+        incident_repo_mock.get.return_value = incident
+        incident_repo_mock.get_history.return_value = [create_random_history_entry(self.faker, seq=0, action=Action.CREATED)]
+        incident_repo_mock.update.return_value = None  # Define explícitamente `update`
+
+        with self.app.container.incident_repo.override(incident_repo_mock):
+            resp = self.client.put(
+                f'/api/v1/clients/{client_id}/incidents/{incident.id}/update-risk',
+                data=json.dumps(data),
+                content_type='application/json',
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        _send_notification.assert_not_called()
+
+    def test_update_risk_validation_error(self) -> None:
+        client_id = str(self.faker.uuid4())
+        incident_id = str(self.faker.uuid4())
+
+        invalid_body = {
+            'risk': 'INVALID_RISK_VALUE',
+            'extra_field': 'unexpected',
+        }
+
+        response = self.client.put(
+            f'/api/v1/clients/{client_id}/incidents/{incident_id}/update-risk',
+            data=json.dumps(invalid_body),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        response_data = json.loads(response.get_data(as_text=True))
+        self.assertIn('Invalid value for risk', response_data['message'])
+        self.assertIn('Unknown field', response_data['message'])

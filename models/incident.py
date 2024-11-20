@@ -12,3 +12,4 @@ class Incident:
     reported_by: str
     created_by: str
     assigned_to: str
+    risk: str | None
