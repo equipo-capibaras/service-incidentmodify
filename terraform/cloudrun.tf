@@ -93,6 +93,7 @@ data "google_iam_policy" "default" {
       data.google_service_account.registroapp.member,
       data.google_service_account.registromail.member,
       data.google_service_account.generativeai.member,
+      data.google_service_account.predictiveai.member,
     ]
   }
 }
