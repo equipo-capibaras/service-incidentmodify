@@ -58,11 +58,20 @@ data "google_service_account" "registromail" {
   depends_on = [ google_project_service.iam ]
 }
 
-# Retrieves the service account of the registromail microservice.
-# This is defined as part of the registromail microservice
+# Retrieves the service account of the generativeai microservice.
+# This is defined as part of the generativeai microservice
 # This service account is given permissions to access this microservice
 data "google_service_account" "generativeai" {
   account_id   = "generativeai"
+
+  depends_on = [ google_project_service.iam ]
+}
+
+# Retrieves the service account of the predictiveai microservice.
+# This is defined as part of the predictiveai microservice
+# This service account is given permissions to access this microservice
+data "google_service_account" "predictiveai" {
+  account_id   = "predictiveai"
 
   depends_on = [ google_project_service.iam ]
 }
