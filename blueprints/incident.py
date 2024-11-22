@@ -267,7 +267,7 @@ class IncidentUpdateRisk(MethodView):
         incident.risk = data.risk
         incident_repo.update(incident)
 
-        if prev_risk != data.risk:
+        if prev_risk != data.risk and prev_risk is not None:
             send_notification(incident.client_id, incident.id, 'incident-risk-updated')
 
         return json_response(incident_to_dict(incident), 200)
