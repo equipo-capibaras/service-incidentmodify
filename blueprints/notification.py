@@ -75,6 +75,7 @@ def incident_to_dict(
             'role': employee_assigned_to.role,
         },
         'history': [history_to_dict(x) for x in history],
+        'risk': incident.risk,
     }
 
 
