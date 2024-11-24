@@ -100,3 +100,17 @@ class FirestoreIncidentRepository(IncidentRepository):
 
     def delete_all(self) -> None:
         self.db.recursive_delete(self.db.collection('clients'))
+
+    def update(self, incident: Incident) -> None:
+        incident_dict = asdict(incident)
+        del incident_dict['id']
+        del incident_dict['client_id']
+
+        client_ref = self.db.collection('clients').document(incident.client_id)
+        incident_ref = cast(CollectionReference, client_ref.collection('incidents')).document(incident.id)
+
+        doc = incident_ref.get()
+        if not doc.exists:
+            raise ValueError(f'Incident with ID {incident.id} not found for client {incident.client_id}.')
+
+        incident_ref.update(incident_dict)

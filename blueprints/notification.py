@@ -32,8 +32,8 @@ def history_to_dict(entry: HistoryEntry) -> dict[str, Any]:
 def incident_to_dict(
     incident: Incident,
     history: list[HistoryEntry],
-    user_repo: UserRepository = Provide[Container.user_repo],
-    employee_repo: EmployeeRepository = Provide[Container.employee_repo],
+    user_repo: UserRepository,
+    employee_repo: EmployeeRepository,
 ) -> dict[str, Any]:
     user_reported_by = user_repo.get(incident.reported_by, incident.client_id)
 
@@ -75,6 +75,7 @@ def incident_to_dict(
             'role': employee_assigned_to.role,
         },
         'history': [history_to_dict(x) for x in history],
+        'risk': incident.risk,
     }
 
 
@@ -84,6 +85,8 @@ def send_notification(  # noqa: PLR0913
     topic: str,
     client_repo: ClientRepository = Provide[Container.client_repo],
     incident_repo: IncidentRepository = Provide[Container.incident_repo],
+    user_repo: UserRepository = Provide[Container.user_repo],
+    employee_repo: EmployeeRepository = Provide[Container.employee_repo],
     project_id: str = Provide[Container.config.project_id],
 ) -> None:
     client = client_repo.get(client_id=client_id)
@@ -96,7 +99,7 @@ def send_notification(  # noqa: PLR0913
 
     history = incident_repo.get_history(client_id=client_id, incident_id=incident_id)
 
-    data = incident_to_dict(incident, list(history))
+    data = incident_to_dict(incident, list(history), user_repo, employee_repo)
 
     data['client'] = client_to_dict(client)
 

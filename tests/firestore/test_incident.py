@@ -12,7 +12,7 @@ from google.cloud.firestore import Client as FirestoreClient  # type: ignore[imp
 from google.cloud.firestore_v1 import CollectionReference
 from unittest_parametrize import ParametrizedTestCase
 
-from models import HistoryEntry, Incident
+from models import Channel, HistoryEntry, Incident
 from repositories.firestore import FirestoreIncidentRepository
 from tests.util import create_random_history_entry, create_random_incident
 
@@ -41,7 +41,7 @@ class TestClient(ParametrizedTestCase):
         # Add n incidents to Firestore
         for _ in range(n):
             incident = create_random_incident(
-                self.faker, client_id=client_id, reported_by=reported_by, assigned_to=assigned_to
+                self.faker, overrides={'client_id': client_id, 'reported_by': reported_by, 'assigned_to': assigned_to}
             )
 
             incidents.append(incident)
@@ -166,3 +166,26 @@ class TestClient(ParametrizedTestCase):
         result = self.repo.get(client_id=client_id, incident_id=incident_id)
 
         self.assertIsNone(result)
+
+    def test_update_existing_incident(self) -> None:
+        incident = self.add_random_incidents(1)[0]
+
+        updated_incident = incident
+        updated_incident.name = 'Updated Incident Name'
+        updated_incident.channel = Channel.EMAIL
+
+        self.repo.update(updated_incident)
+
+        client_ref = self.client.collection('clients').document(updated_incident.client_id)
+        incident_ref = cast(CollectionReference, client_ref.collection('incidents')).document(updated_incident.id)
+        doc = incident_ref.get()
+
+        self.assertTrue(doc.exists)
+
+    def test_update_non_existing_incident(self) -> None:
+        incident = create_random_incident(self.faker)
+
+        with self.assertRaises(ValueError) as context:
+            self.repo.update(incident)
+
+        self.assertEqual(str(context.exception), f'Incident with ID {incident.id} not found for client {incident.client_id}.')

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from models import Action, Channel, HistoryEntry, Incident
+from models import Action, Channel, HistoryEntry, Incident, Risk
 
 CLIENT_ID_GIGATEL = '9a652818-342e-4771-84cf-39c20a29264d'
 AGENT_ID_GIGATEL_JULIAN = '0abad006-921c-4e09-b2a6-10713b71571f'
@@ -19,6 +19,7 @@ incident1 = Incident(
     reported_by=USER_ID_GIGATEL_MARIA,
     created_by=AGENT_ID_GIGATEL_JULIAN,
     assigned_to=AGENT_ID_GIGATEL_JULIAN,
+    risk=Risk.MEDIUM,
 )
 
 incident1_history = [
@@ -51,6 +52,7 @@ incident2 = Incident(
     reported_by=USER_ID_GIGATEL_MARIA,
     created_by=USER_ID_GIGATEL_MARIA,
     assigned_to=AGENT_ID_GIGATEL_JULIAN,
+    risk=Risk.HIGH,
 )
 
 incident2_history = [
@@ -86,6 +88,7 @@ incident3 = Incident(
     reported_by=USER_ID_GIGATEL_MARIA,
     created_by=USER_ID_GIGATEL_MARIA,
     assigned_to=AGENT_ID_GIGATEL_JULIAN,
+    risk=None,
 )
 
 incident3_history = [
@@ -110,6 +113,7 @@ incident4 = Incident(
     reported_by=USER_ID_GIGATEL_JUAN,
     created_by=AGENT_ID_GIGATEL_JULIAN,
     assigned_to=AGENT_ID_GIGATEL_JULIAN,
+    risk=Risk.LOW,
 )
 
 incident4_history = [
@@ -140,6 +144,7 @@ incident5 = Incident(
     reported_by=USER_ID_GIGATEL_JUAN,
     created_by=USER_ID_GIGATEL_JUAN,
     assigned_to=AGENT_ID_GIGATEL_JULIAN,
+    risk=Risk.MEDIUM,
 )
 
 incident5_history = [
@@ -175,6 +180,7 @@ incident6 = Incident(
     reported_by=USER_ID_GIGATEL_JUAN,
     created_by=USER_ID_GIGATEL_JUAN,
     assigned_to=AGENT_ID_GIGATEL_JULIAN,
+    risk=None,
 )
 
 incident6_history = [
@@ -199,6 +205,7 @@ incident7 = Incident(
     reported_by=USER_ID_UNIVERSO_RAFAEL,
     created_by=AGENT_ID_UNIVERSO_JOAO,
     assigned_to=AGENT_ID_UNIVERSO_JOAO,
+    risk=Risk.HIGH,
 )
 
 incident7_history = [
@@ -253,6 +260,7 @@ incident8 = Incident(
     reported_by=USER_ID_UNIVERSO_RAFAEL,
     created_by=AGENT_ID_UNIVERSO_JOAO,
     assigned_to=AGENT_ID_UNIVERSO_JOAO,
+    risk=Risk.LOW,
 )
 
 incident8_history = [
@@ -262,10 +270,8 @@ incident8_history = [
         date=datetime(2024, 10, 27, 14, 26, 22, tzinfo=UTC),
         action=Action.CREATED,
         description=(
-            'He recibido mi factura de septiembre y aparece un cobro adicional por un servicio que no contraté. '
-            'El servicio en cuestión se llama "Asistencia Técnica Premium", pero yo nunca solicité ni autoricé este servicio. '
-            'Me di cuenta del cobro hoy, 10 de septiembre, al revisar el detalle de la factura. '
-            'Solicito que se revise mi cuenta y se realice el ajuste correspondiente en el menor tiempo posible.'
+            'En mi factura de septiembre se me ha cobrado un servicio no solicitado llamado "Asistencia Técnica Premium". '
+            'No autoricé este servicio y solicito su eliminación y el ajuste correspondiente a mi cuenta.'
         ),
     ),
     HistoryEntry(
