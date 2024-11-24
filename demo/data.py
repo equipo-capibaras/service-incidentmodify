@@ -270,10 +270,8 @@ incident8_history = [
         date=datetime(2024, 10, 27, 14, 26, 22, tzinfo=UTC),
         action=Action.CREATED,
         description=(
-            'He recibido mi factura de septiembre y aparece un cobro adicional por un servicio que no contraté. '
-            'El servicio en cuestión se llama "Asistencia Técnica Premium", pero yo nunca solicité ni autoricé este servicio. '
-            'Me di cuenta del cobro hoy, 10 de septiembre, al revisar el detalle de la factura. '
-            'Solicito que se revise mi cuenta y se realice el ajuste correspondiente en el menor tiempo posible.'
+            'En mi factura de septiembre se me ha cobrado un servicio no solicitado llamado "Asistencia Técnica Premium". '
+            'No autoricé este servicio y solicito su eliminación y el ajuste correspondiente a mi cuenta.'
         ),
     ),
     HistoryEntry(
